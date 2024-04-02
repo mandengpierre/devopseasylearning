@@ -1,0 +1,201 @@
+#apiVersion: v1
+
+#kind: Secret
+
+#metadata:
+
+ # name: espresso-secret
+
+#type: Opaque
+
+#data:
+
+ # username: <base64_encoded_username>
+
+  #password: <base64_encoded_password>
+
+
+
+---
+
+
+
+apiVersion: v1
+
+kind: ConfigMap
+
+metadata:
+
+  name: espresso-configmap
+
+data:
+
+  ProductCatalogUrl: "http://espresso-shop-product-catalog-svc:8091"
+
+  ReviewsUrl: "http://espresso-shop-reviews-svc:8092"
+
+
+
+---
+
+
+
+apiVersion: apps/v1
+
+kind: Deployment
+
+metadata:
+
+  name: shop-web-deployment
+
+spec:
+
+  replicas: 3                                    # Adjust the number of replicas as needed
+
+  selector:
+
+    matchLabels:
+
+      app: shop-web
+
+  strategy:
+
+    type: RollingUpdate                         # Use rollingUpdate deployment strategy
+
+    rollingUpdate:
+
+      maxUnavailable: 1                         # Allow at most 1 unavailable pod during update
+
+      maxSurge: 1                               # Allow at most 1 additional pod during update
+
+  template:
+
+    metadata:
+
+      labels:
+
+        app: shop-web
+
+        version: v1                            # Create label 'version: v1'
+
+    spec:
+
+      containers:
+
+      - name: shop-web
+
+        image: pierrealainmandeng/s7pierre:espressoweb
+
+        ports:
+
+        - containerPort: 80
+
+        env:
+
+        - name: ProductCatalogUrl               # Set environment variable ProductCatalogUrl
+
+          valueFrom:
+
+            configMapKeyRef:
+
+              name: espresso-configmap
+
+              key: ProductCatalogUrl
+
+        - name: ReviewsUrl                      # Set environment variable ReviewsUrl
+
+          valueFrom:
+
+            configMapKeyRef:
+
+              name: espresso-configmap
+
+              key: ReviewsUrl
+
+        - name: USERNAME
+
+          valueFrom:
+
+            secretKeyRef:
+
+              name: espresso-secret
+
+              key: username
+
+        - name: PASSWORD
+
+          valueFrom:
+
+            secretKeyRef:
+
+              name: espresso-secret
+
+              key: password
+
+        readinessProbe:                          # Define readiness probe
+
+          httpGet:
+
+            path: /healthz
+
+            port: 80
+
+        livenessProbe:                           # Define liveness probe
+
+          httpGet:
+
+            path: /healthz
+
+            port: 80
+
+---
+
+apiVersion: v1
+
+kind: Service
+
+metadata:
+
+  name: shop-web-service
+
+spec:
+
+  type: NodePort                                  # Expose service using NodePort
+
+  selector:
+
+    app: shop-web
+
+  ports:
+
+    - protocol: TCP
+
+      port: 8090
+
+      targetPort: 80
+
+      #nodePort: 30080                              # Specify nodePort value (adjust as needed)
+
+---
+
+apiVersion: policy/v1
+
+kind: PodDisruptionBudget
+
+metadata:
+
+  name: shop-web-pdb
+
+spec:
+
+  selector:
+
+    matchLabels:
+
+      app: shop-web
+
+  maxUnavailable: 1                               # Allow at most 1 unavailable pod
+
+
+
+
